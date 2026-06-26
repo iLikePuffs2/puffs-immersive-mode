@@ -2,6 +2,8 @@
   "hideLeftSidebar": true,
   "hideRightSidebar": true,
   "hideStatusBar": true,
+  "hideScrollbar": true,
+  "autoHideCursorDelay": 500,
   "exitOnEsc": false,
   "hideRibbon": false,
   "hideTabHeader": false,

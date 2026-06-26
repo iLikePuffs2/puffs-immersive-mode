@@ -7,6 +7,8 @@ const DEFAULT_SETTINGS = {
 	hideLeftSidebar: true,
 	hideRightSidebar: true,
 	hideStatusBar: true,
+	hideScrollbar: true,
+	autoHideCursorDelay: 500,
 	exitOnEsc: true,
 };
 
@@ -31,6 +33,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.wasLeftOpen = false;
 		this.wasRightOpen = false;
 		this.wasFullScreen = false;
+		this.cursorHideTimeout = null;
 
 		await this.loadSettings();
 
@@ -61,6 +64,10 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 				this.exitImmersiveMode();
 			}
 		}, true); // useCapture = true，优先于 Obsidian 捕获
+
+		this.registerDomEvent(document, 'mousemove', () => {
+			this.resetCursorHideTimer();
+		});
 
 		// 设置选项卡
 		this.addSettingTab(new ImmersiveModeSettingTab(this.app, this));
@@ -109,6 +116,35 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 	// ── 核心逻辑 ───────────────────────────────────────────────────────
 
+	getAutoHideCursorDelay() {
+		const delay = Number(this.settings.autoHideCursorDelay);
+		return Number.isFinite(delay) && delay > 0 ? delay : 0;
+	}
+
+	clearCursorHideTimer() {
+		if (this.cursorHideTimeout !== null) {
+			window.clearTimeout(this.cursorHideTimeout);
+			this.cursorHideTimeout = null;
+		}
+		document.body.classList.remove('immersive-hide-cursor');
+	}
+
+	resetCursorHideTimer() {
+		this.clearCursorHideTimer();
+
+		const delay = this.getAutoHideCursorDelay();
+		if (!this.isImmersive || delay === 0) {
+			return;
+		}
+
+		this.cursorHideTimeout = window.setTimeout(() => {
+			if (this.isImmersive && this.getAutoHideCursorDelay() > 0) {
+				document.body.classList.add('immersive-hide-cursor');
+			}
+			this.cursorHideTimeout = null;
+		}, delay);
+	}
+
 	toggleImmersiveMode() {
 		if (this.isImmersive) {
 			this.exitImmersiveMode();
@@ -141,9 +177,13 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		if (this.settings.hideStatusBar) {
 			document.body.classList.add('immersive-hide-statusbar');
 		}
+		if (this.settings.hideScrollbar) {
+			document.body.classList.add('immersive-hide-scrollbar');
+		}
 
 		// 5. 更新状态和图标
 		this.isImmersive = true;
+		this.resetCursorHideTimer();
 		this.ribbonIconEl.setAttribute('aria-label', '退出沉浸模式');
 		this.ribbonIconEl.classList.add('is-active');
 	}
@@ -152,8 +192,11 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		// 1. 移除所有 CSS 类
 		document.body.classList.remove(
 			'immersive-mode',
-			'immersive-hide-statusbar'
+			'immersive-hide-statusbar',
+			'immersive-hide-scrollbar',
+			'immersive-hide-cursor'
 		);
+		this.clearCursorHideTimer();
 
 		// 2. 恢复侧边栏
 		if (this.wasLeftOpen) {
@@ -228,6 +271,37 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.hideStatusBar)
 					.onChange(async (value) => {
 						this.plugin.settings.hideStatusBar = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('隐藏右侧滚动条')
+			.setDesc('进入沉浸模式时隐藏右侧可上下拖动的滚动条。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideScrollbar)
+					.onChange(async (value) => {
+						this.plugin.settings.hideScrollbar = value;
+						document.body.classList.toggle(
+							'immersive-hide-scrollbar',
+							this.plugin.isImmersive && value
+						);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('自动隐藏鼠标延迟 (ms)')
+			.setDesc('鼠标不动超过该时间后隐藏光标。单位：ms；设为 0 则不自动隐藏。默认 500ms。')
+			.addText((text) =>
+				text
+					.setPlaceholder('500')
+					.setValue(String(this.plugin.settings.autoHideCursorDelay))
+					.onChange(async (value) => {
+						const delay = Math.max(0, Number.parseInt(value, 10) || 0);
+						this.plugin.settings.autoHideCursorDelay = delay;
+						this.plugin.resetCursorHideTimer();
 						await this.plugin.saveSettings();
 					})
 			);

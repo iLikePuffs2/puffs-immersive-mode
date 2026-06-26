@@ -4,3 +4,20 @@
 body.immersive-hide-statusbar .status-bar {
 	display: none !important;
 }
+
+/* 隐藏右侧滚动条 */
+body.immersive-hide-scrollbar,
+body.immersive-hide-scrollbar * {
+	scrollbar-width: none !important;
+}
+
+body.immersive-hide-scrollbar ::-webkit-scrollbar {
+	width: 0 !important;
+	height: 0 !important;
+}
+
+/* 自动隐藏鼠标光标 */
+body.immersive-hide-cursor,
+body.immersive-hide-cursor * {
+	cursor: none !important;
+}
