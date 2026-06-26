@@ -1,0 +1,6 @@
+/* ===== 沉浸模式样式 ===== */
+
+/* 隐藏底部状态栏 */
+body.immersive-hide-statusbar .status-bar {
+	display: none !important;
+}

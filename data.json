@@ -1,0 +1,9 @@
+{
+  "hideLeftSidebar": true,
+  "hideRightSidebar": true,
+  "hideStatusBar": true,
+  "exitOnEsc": false,
+  "hideRibbon": false,
+  "hideTabHeader": false,
+  "hideTitleBar": false
+}
