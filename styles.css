@@ -5,6 +5,30 @@ body.immersive-hide-statusbar .status-bar {
 	display: none !important;
 }
 
+/* 隐藏顶栏和底栏时保留占位 */
+body.immersive-mode.immersive-preserve-top-bottom-space .titlebar,
+body.immersive-mode.immersive-preserve-top-bottom-space .workspace-tab-header-container {
+	visibility: hidden !important;
+	pointer-events: none !important;
+}
+
+body.immersive-mode.immersive-preserve-top-bottom-space .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
+	display: flex !important;
+	height: 40px !important;
+	min-height: 40px !important;
+}
+
+body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-statusbar .status-bar {
+	display: flex !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+}
+
+body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-statusbar .workspace {
+	box-sizing: border-box;
+	padding-bottom: 31px;
+}
+
 /* 隐藏右侧滚动条 */
 body.immersive-hide-scrollbar,
 body.immersive-hide-scrollbar * {

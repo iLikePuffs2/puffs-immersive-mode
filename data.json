@@ -4,6 +4,7 @@
   "hideStatusBar": true,
   "hideScrollbar": true,
   "autoHideCursorDelay": 500,
+  "preserveTopBottomSpace": true,
   "exitOnEsc": false,
   "hideRibbon": false,
   "hideTabHeader": false,

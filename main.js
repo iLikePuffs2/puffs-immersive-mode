@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
 	hideStatusBar: true,
 	hideScrollbar: true,
 	autoHideCursorDelay: 500,
+	preserveTopBottomSpace: false,
 	exitOnEsc: true,
 };
 
@@ -42,6 +43,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			id: 'toggle-immersive-mode',
 			name: 'Toggle Immersive Mode',
 			callback: () => this.toggleImmersiveMode(),
+		});
+
+		this.addCommand({
+			id: 'toggle-preserve-top-bottom-space',
+			name: '切换：隐藏顶栏和底栏时依旧占位',
+			callback: () => this.togglePreserveTopBottomSpace(),
 		});
 
 		// Ribbon 图标，点击切换沉浸模式
@@ -145,6 +152,19 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}, delay);
 	}
 
+	updatePreserveTopBottomSpaceClass() {
+		document.body.classList.toggle(
+			'immersive-preserve-top-bottom-space',
+			this.isImmersive && this.settings.preserveTopBottomSpace
+		);
+	}
+
+	async togglePreserveTopBottomSpace() {
+		this.settings.preserveTopBottomSpace = !this.settings.preserveTopBottomSpace;
+		this.updatePreserveTopBottomSpaceClass();
+		await this.saveSettings();
+	}
+
 	toggleImmersiveMode() {
 		if (this.isImmersive) {
 			this.exitImmersiveMode();
@@ -183,6 +203,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 		// 5. 更新状态和图标
 		this.isImmersive = true;
+		this.updatePreserveTopBottomSpaceClass();
 		this.resetCursorHideTimer();
 		this.ribbonIconEl.setAttribute('aria-label', '退出沉浸模式');
 		this.ribbonIconEl.classList.add('is-active');
@@ -194,7 +215,8 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			'immersive-mode',
 			'immersive-hide-statusbar',
 			'immersive-hide-scrollbar',
-			'immersive-hide-cursor'
+			'immersive-hide-cursor',
+			'immersive-preserve-top-bottom-space'
 		);
 		this.clearCursorHideTimer();
 
@@ -302,6 +324,19 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 						const delay = Math.max(0, Number.parseInt(value, 10) || 0);
 						this.plugin.settings.autoHideCursorDelay = delay;
 						this.plugin.resetCursorHideTimer();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('隐藏顶栏和底栏时依旧占位')
+			.setDesc('进入沉浸模式后，顶栏和底栏仍会隐藏，但保留它们原本占用的空间。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.preserveTopBottomSpace)
+					.onChange(async (value) => {
+						this.plugin.settings.preserveTopBottomSpace = value;
+						this.plugin.updatePreserveTopBottomSpaceClass();
 						await this.plugin.saveSettings();
 					})
 			);
