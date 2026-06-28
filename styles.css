@@ -5,14 +5,35 @@ body.immersive-hide-statusbar .status-bar {
 	display: none !important;
 }
 
-/* 隐藏顶栏和底栏时保留占位 */
-body.immersive-mode.immersive-preserve-top-bottom-space .titlebar,
-body.immersive-mode.immersive-preserve-top-bottom-space .workspace-tab-header-container {
+/* 隐藏顶部导航栏 */
+body.immersive-mode.immersive-hide-top-nav:not(.immersive-preserve-top-bottom-space) .workspace-tab-header-container {
+	display: none !important;
+}
+
+body.immersive-mode:not(.immersive-hide-top-nav) .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
+	display: flex !important;
+	height: 40px !important;
+	min-height: 40px !important;
+	visibility: visible !important;
+	pointer-events: auto !important;
+}
+
+/* 常规时隐藏顶部导航栏并保留占位 */
+body.puffs-hide-top-nav-normal .workspace .mod-root .workspace-tab-header-container {
+	display: flex !important;
+	height: 40px !important;
+	min-height: 40px !important;
 	visibility: hidden !important;
 	pointer-events: none !important;
 }
 
-body.immersive-mode.immersive-preserve-top-bottom-space .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
+/* 隐藏顶栏和底栏时保留占位 */
+body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-top-nav .workspace-tab-header-container {
+	visibility: hidden !important;
+	pointer-events: none !important;
+}
+
+body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-top-nav .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
 	display: flex !important;
 	height: 40px !important;
 	min-height: 40px !important;

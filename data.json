@@ -1,6 +1,8 @@
 {
   "hideLeftSidebar": true,
   "hideRightSidebar": true,
+  "hideTopNavBar": true,
+  "hideTopNavBarNormally": false,
   "hideStatusBar": true,
   "hideScrollbar": true,
   "autoHideCursorDelay": 500,

@@ -6,6 +6,8 @@ const obsidian = require('obsidian');
 const DEFAULT_SETTINGS = {
 	hideLeftSidebar: true,
 	hideRightSidebar: true,
+	hideTopNavBar: true,
+	hideTopNavBarNormally: false,
 	hideStatusBar: true,
 	hideScrollbar: true,
 	autoHideCursorDelay: 500,
@@ -41,6 +43,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.standardPageHistory = [];
 
 		await this.loadSettings();
+		this.updateNormalTopNavBarClass();
 
 		// 注册切换命令（用户可自行绑定快捷键）
 		this.addCommand({
@@ -53,6 +56,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			id: 'toggle-preserve-top-bottom-space',
 			name: '切换：隐藏顶栏和底栏时依旧占位',
 			callback: () => this.togglePreserveTopBottomSpace(),
+		});
+
+		this.addCommand({
+			id: 'toggle-hide-top-nav-normally',
+			name: '切换：常规时隐藏顶部导航栏',
+			callback: () => this.toggleHideTopNavNormally(),
 		});
 
 		// Ribbon 图标，点击切换沉浸模式
@@ -118,6 +127,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		if (this.isImmersive) {
 			this.exitImmersiveMode();
 		}
+		document.body.classList.remove('puffs-hide-top-nav-normal');
 	}
 
 	// ── 状态辅助方法 ───────────────────────────────────────────────────
@@ -223,9 +233,22 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		);
 	}
 
+	updateNormalTopNavBarClass() {
+		document.body.classList.toggle(
+			'puffs-hide-top-nav-normal',
+			this.settings.hideTopNavBarNormally
+		);
+	}
+
 	async togglePreserveTopBottomSpace() {
 		this.settings.preserveTopBottomSpace = !this.settings.preserveTopBottomSpace;
 		this.updatePreserveTopBottomSpaceClass();
+		await this.saveSettings();
+	}
+
+	async toggleHideTopNavNormally() {
+		this.settings.hideTopNavBarNormally = !this.settings.hideTopNavBarNormally;
+		this.updateNormalTopNavBarClass();
 		await this.saveSettings();
 	}
 
@@ -485,6 +508,9 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 		// 4. 根据设置添加 CSS 类
 		document.body.classList.add('immersive-mode');
+		if (this.settings.hideTopNavBar) {
+			document.body.classList.add('immersive-hide-top-nav');
+		}
 		if (this.settings.hideStatusBar) {
 			document.body.classList.add('immersive-hide-statusbar');
 		}
@@ -508,6 +534,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		// 1. 移除所有 CSS 类
 		document.body.classList.remove(
 			'immersive-mode',
+			'immersive-hide-top-nav',
 			'immersive-hide-statusbar',
 			'immersive-hide-scrollbar',
 			'immersive-hide-cursor',
@@ -581,6 +608,39 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.hideRightSidebar)
 					.onChange(async (value) => {
 						this.plugin.settings.hideRightSidebar = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('隐藏顶部导航栏')
+			.setDesc('进入沉浸模式时隐藏顶部标签页导航栏。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideTopNavBar)
+					.onChange(async (value) => {
+						this.plugin.settings.hideTopNavBar = value;
+						document.body.classList.toggle(
+							'immersive-hide-top-nav',
+							this.plugin.isImmersive && value
+						);
+						if (this.plugin.isImmersive && this.plugin.settings.standardPageTurn) {
+							this.plugin.clearStandardPageHistory();
+							this.plugin.scheduleStandardPageTrim(this.plugin.getStandardPageScroller());
+						}
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('常规时隐藏顶部导航栏')
+			.setDesc('即使没有进入沉浸模式，依旧隐藏顶部标签页导航栏，且保持空白占位')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideTopNavBarNormally)
+					.onChange(async (value) => {
+						this.plugin.settings.hideTopNavBarNormally = value;
+						this.plugin.updateNormalTopNavBarClass();
 						await this.plugin.saveSettings();
 					})
 			);
