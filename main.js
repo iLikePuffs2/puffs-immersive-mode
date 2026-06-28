@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
 	hideStatusBar: true,
 	hideScrollbar: true,
 	autoHideCursorDelay: 500,
+	cursorBlinkCount: 10,
 	preserveTopBottomSpace: false,
 	exitOnEsc: true,
 };
@@ -75,6 +76,10 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.registerDomEvent(document, 'mousemove', () => {
 			this.resetCursorHideTimer();
 		});
+
+		this.registerDomEvent(document, 'pointerdown', () => {
+			this.restartCursorBlink();
+		}, true);
 
 		// 设置选项卡
 		this.addSettingTab(new ImmersiveModeSettingTab(this.app, this));
@@ -152,6 +157,37 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}, delay);
 	}
 
+	getCursorBlinkCount() {
+		const count = Number.parseInt(this.settings.cursorBlinkCount, 10);
+		if (!Number.isFinite(count)) {
+			return DEFAULT_SETTINGS.cursorBlinkCount;
+		}
+		return Math.min(10, Math.max(0, count));
+	}
+
+	updateCursorBlinkClass() {
+		const count = this.getCursorBlinkCount();
+		document.body.style.setProperty('--puffs-cursor-blink-count', String(count));
+		document.body.classList.toggle(
+			'immersive-caret-no-blink',
+			this.isImmersive && count === 0
+		);
+		document.body.classList.toggle(
+			'immersive-caret-limited-blink',
+			this.isImmersive && count > 0 && count < 10
+		);
+	}
+
+	restartCursorBlink() {
+		if (!this.isImmersive || this.getCursorBlinkCount() < 1 || this.getCursorBlinkCount() >= 10) {
+			return;
+		}
+
+		document.body.classList.remove('immersive-caret-limited-blink');
+		document.body.offsetHeight;
+		document.body.classList.add('immersive-caret-limited-blink');
+	}
+
 	updatePreserveTopBottomSpaceClass() {
 		document.body.classList.toggle(
 			'immersive-preserve-top-bottom-space',
@@ -204,6 +240,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		// 5. 更新状态和图标
 		this.isImmersive = true;
 		this.updatePreserveTopBottomSpaceClass();
+		this.updateCursorBlinkClass();
 		this.resetCursorHideTimer();
 		this.ribbonIconEl.setAttribute('aria-label', '退出沉浸模式');
 		this.ribbonIconEl.classList.add('is-active');
@@ -216,8 +253,11 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			'immersive-hide-statusbar',
 			'immersive-hide-scrollbar',
 			'immersive-hide-cursor',
-			'immersive-preserve-top-bottom-space'
+			'immersive-preserve-top-bottom-space',
+			'immersive-caret-no-blink',
+			'immersive-caret-limited-blink'
 		);
+		document.body.style.removeProperty('--puffs-cursor-blink-count');
 		this.clearCursorHideTimer();
 
 		// 2. 恢复侧边栏
@@ -324,6 +364,24 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 						const delay = Math.max(0, Number.parseInt(value, 10) || 0);
 						this.plugin.settings.autoHideCursorDelay = delay;
 						this.plugin.resetCursorHideTimer();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('光标闪烁次数')
+			.setDesc('每次点击后光标闪烁的次数。输入 0 到 10 的整数；0 为完全不闪烁，10 为一直闪烁。默认 10。')
+			.addText((text) =>
+				text
+					.setPlaceholder('10')
+					.setValue(String(this.plugin.settings.cursorBlinkCount))
+					.onChange(async (value) => {
+						const parsed = Number.parseInt(value, 10);
+						const count = Number.isFinite(parsed)
+							? Math.min(10, Math.max(0, parsed))
+							: DEFAULT_SETTINGS.cursorBlinkCount;
+						this.plugin.settings.cursorBlinkCount = count;
+						this.plugin.updateCursorBlinkClass();
 						await this.plugin.saveSettings();
 					})
 			);
