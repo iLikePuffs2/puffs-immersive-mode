@@ -46,6 +46,11 @@ body.immersive-hide-cursor * {
 	cursor: none !important;
 }
 
+/* 标准翻页时隐藏底部半行 */
+body.immersive-mode .immersive-standard-page-scroller {
+	clip-path: inset(0 0 var(--puffs-standard-page-bottom-trim, 0px) 0);
+}
+
 /* 控制编辑光标闪烁次数 */
 body.immersive-mode.immersive-caret-no-blink .cm-editor .cm-content {
 	caret-animation: manual !important;

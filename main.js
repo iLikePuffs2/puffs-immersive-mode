@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
 	autoHideCursorDelay: 500,
 	cursorBlinkCount: 10,
 	preserveTopBottomSpace: false,
+	standardPageTurn: true,
 	exitOnEsc: true,
 };
 
@@ -36,6 +37,8 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.wasRightOpen = false;
 		this.wasFullScreen = false;
 		this.cursorHideTimeout = null;
+		this.standardPageScrollerEl = null;
+		this.standardPageHistory = [];
 
 		await this.loadSettings();
 
@@ -60,7 +63,23 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		);
 
 		// ESC 键退出沉浸模式（需在设置中开启）
-		this.registerDomEvent(document, 'keydown', (evt) => {
+		this.keydownHandler = (evt) => {
+			if (
+				this.settings.standardPageTurn &&
+				this.isImmersive &&
+				!this.hasOpenModal() &&
+				(evt.key === 'PageDown' || evt.key === 'PageUp') &&
+				!evt.altKey &&
+				!evt.ctrlKey &&
+				!evt.metaKey
+			) {
+				if (this.standardPageTurn(evt.key === 'PageDown' ? 1 : -1)) {
+					evt.preventDefault();
+					evt.stopPropagation();
+				}
+				return;
+			}
+
 			if (
 				this.settings.exitOnEsc &&
 				evt.key === 'Escape' &&
@@ -71,7 +90,9 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 				evt.stopPropagation();
 				this.exitImmersiveMode();
 			}
-		}, true); // useCapture = true，优先于 Obsidian 捕获
+		};
+		document.addEventListener('keydown', this.keydownHandler, true);
+		this.register(() => document.removeEventListener('keydown', this.keydownHandler, true));
 
 		this.registerDomEvent(document, 'mousemove', () => {
 			this.resetCursorHideTimer();
@@ -80,6 +101,13 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.registerDomEvent(document, 'pointerdown', () => {
 			this.restartCursorBlink();
 		}, true);
+
+		this.registerDomEvent(window, 'resize', () => {
+			if (this.isImmersive && this.settings.standardPageTurn) {
+				this.clearStandardPageHistory();
+				this.applyStandardPageTrim(this.getStandardPageScroller());
+			}
+		});
 
 		// 设置选项卡
 		this.addSettingTab(new ImmersiveModeSettingTab(this.app, this));
@@ -201,6 +229,233 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		await this.saveSettings();
 	}
 
+	getStandardPageScroller() {
+		const activeEl = document.activeElement;
+		const activeScroller = activeEl && activeEl.closest('.cm-scroller, .markdown-preview-view');
+		if (this.isScrollable(activeScroller)) {
+			return activeScroller;
+		}
+
+		const leaf = activeEl?.closest('.workspace-leaf') || document.querySelector('.workspace-leaf.mod-active');
+		const selectors = [
+			'.cm-scroller',
+			'.markdown-preview-view',
+			'.puffs-reader-content',
+			'.puffs-reader-main',
+			'.view-content',
+		];
+
+		for (const selector of selectors) {
+			const el = leaf?.querySelector(selector);
+			if (this.isScrollable(el)) {
+				return el;
+			}
+		}
+
+		return Array.from(leaf?.querySelectorAll('*') || []).find((el) => this.isScrollable(el)) || null;
+	}
+
+	isScrollable(el) {
+		if (!el) {
+			return false;
+		}
+
+		const style = getComputedStyle(el);
+		return (
+			el.clientHeight > 0 &&
+			el.scrollHeight > el.clientHeight + 1 &&
+			style.overflowY !== 'hidden' &&
+			style.display !== 'none'
+		);
+	}
+
+	getStandardPageLineElements(scroller) {
+		if (scroller.classList.contains('cm-scroller')) {
+			return Array.from(scroller.querySelectorAll('.cm-content .cm-line'));
+		}
+
+		const elements = Array.from(scroller.querySelectorAll(
+			'.puffs-reader-line, .puffs-reader-paragraph, p, li, .markdown-preview-section > div'
+		));
+
+		return elements.length ? elements : Array.from(scroller.children);
+	}
+
+	getStandardPageLines(scroller) {
+		const scrollerRect = scroller.getBoundingClientRect();
+		const lines = [];
+
+		for (const el of this.getStandardPageLineElements(scroller)) {
+			if (!el.textContent.trim()) {
+				continue;
+			}
+
+			const range = document.createRange();
+			range.selectNodeContents(el);
+			for (const rect of Array.from(range.getClientRects())) {
+				if (
+					rect.width > 0 &&
+					rect.height > 0 &&
+					rect.bottom >= scrollerRect.top - scrollerRect.height &&
+					rect.top <= scrollerRect.bottom + scrollerRect.height
+				) {
+					lines.push({
+						top: rect.top,
+						bottom: rect.bottom,
+						height: rect.height,
+					});
+				}
+			}
+			range.detach();
+		}
+
+		return lines
+			.sort((a, b) => a.top - b.top)
+			.filter((line, index, sorted) => index === 0 || Math.abs(line.top - sorted[index - 1].top) > 1);
+	}
+
+	getStandardPageFallbackStep(scroller) {
+		const style = getComputedStyle(scroller);
+		const lineHeight = Number.parseFloat(style.lineHeight) || 24;
+		const lineCount = Math.max(1, Math.floor(scroller.clientHeight / lineHeight));
+		return lineCount * lineHeight;
+	}
+
+	getStandardPageTrim(scroller) {
+		return Number.parseFloat(scroller.style.getPropertyValue('--puffs-standard-page-bottom-trim')) || 0;
+	}
+
+	getStandardPageRect(scroller) {
+		const rect = scroller.getBoundingClientRect();
+		const trim = this.getStandardPageTrim(scroller);
+		return {
+			top: rect.top,
+			bottom: rect.bottom - trim,
+			height: rect.height - trim,
+			rawBottom: rect.bottom,
+		};
+	}
+
+	clearStandardPageTrim() {
+		const scrollers = new Set(document.querySelectorAll('.immersive-standard-page-scroller'));
+		if (this.standardPageScrollerEl) {
+			scrollers.add(this.standardPageScrollerEl);
+		}
+
+		for (const scroller of scrollers) {
+			scroller.classList.remove('immersive-standard-page-scroller');
+			scroller.style.removeProperty('--puffs-standard-page-bottom-trim');
+		}
+		this.standardPageScrollerEl = null;
+	}
+
+	clearStandardPageHistory() {
+		this.standardPageHistory = [];
+	}
+
+	popStandardPageHistory(scroller) {
+		const last = this.standardPageHistory[this.standardPageHistory.length - 1];
+		if (!last || last.scroller !== scroller || Math.abs(scroller.scrollTop - last.to) > 2) {
+			return null;
+		}
+
+		this.standardPageHistory.pop();
+		return last.from;
+	}
+
+	pushStandardPageHistory(scroller, from, to) {
+		if (Math.abs(to - from) <= 1) {
+			return;
+		}
+
+		this.standardPageHistory.push({ scroller, from, to });
+		if (this.standardPageHistory.length > 50) {
+			this.standardPageHistory.shift();
+		}
+	}
+
+	applyStandardPageTrim(scroller) {
+		this.clearStandardPageTrim();
+		if (!this.isImmersive || !this.settings.standardPageTurn || !scroller) {
+			return;
+		}
+
+		const rect = scroller.getBoundingClientRect();
+		const lines = this.getStandardPageLines(scroller);
+		const fullLines = lines.filter((line) => (
+			line.top >= rect.top - 1 &&
+			line.bottom <= rect.bottom + 1
+		));
+		const lastFullLine = fullLines[fullLines.length - 1];
+		const trim = lastFullLine
+			? Math.max(0, Math.floor(rect.bottom - lastFullLine.bottom))
+			: 0;
+
+		scroller.classList.add('immersive-standard-page-scroller');
+		scroller.style.setProperty('--puffs-standard-page-bottom-trim', `${trim}px`);
+		this.standardPageScrollerEl = scroller;
+	}
+
+	scheduleStandardPageTrim(scroller) {
+		window.requestAnimationFrame(() => {
+			if (this.isImmersive && this.settings.standardPageTurn) {
+				this.applyStandardPageTrim(scroller || this.getStandardPageScroller());
+			}
+		});
+	}
+
+	standardPageTurn(direction) {
+		const scroller = this.getStandardPageScroller();
+		if (!scroller) {
+			return false;
+		}
+
+		if (direction < 0) {
+			const historyTarget = this.popStandardPageHistory(scroller);
+			if (historyTarget !== null) {
+				scroller.scrollTop = historyTarget;
+				this.scheduleStandardPageTrim(scroller);
+				this.resetCursorHideTimer();
+				return true;
+			}
+		}
+
+		const originalScrollTop = scroller.scrollTop;
+		this.applyStandardPageTrim(scroller);
+		const scrollerRect = this.getStandardPageRect(scroller);
+		const lines = this.getStandardPageLines(scroller);
+		let targetTop = null;
+
+		if (direction > 0) {
+			const nextLine = lines.find((line) => line.top >= scrollerRect.bottom - 1);
+			targetTop = nextLine
+				? scroller.scrollTop + nextLine.top - scrollerRect.top
+				: scroller.scrollTop + this.getStandardPageFallbackStep(scroller);
+		} else {
+			const visibleLines = lines.filter((line) => (
+				line.top >= scrollerRect.top - 1 &&
+				line.top < scrollerRect.bottom - 1
+			));
+			const firstVisible = visibleLines[0] || lines.find((line) => line.top >= scrollerRect.top - 1);
+			const previousLines = firstVisible
+				? lines.filter((line) => line.top < firstVisible.top - 1)
+				: [];
+			const targetLine = previousLines[Math.max(0, previousLines.length - Math.max(1, visibleLines.length))];
+			targetTop = targetLine
+				? scroller.scrollTop + targetLine.top - scrollerRect.top
+				: scroller.scrollTop - this.getStandardPageFallbackStep(scroller);
+		}
+
+		const maxScrollTop = scroller.scrollHeight - scroller.clientHeight;
+		scroller.scrollTop = Math.min(maxScrollTop, Math.max(0, targetTop));
+		if (direction > 0) {
+			this.pushStandardPageHistory(scroller, originalScrollTop, scroller.scrollTop);
+		}
+		this.scheduleStandardPageTrim(scroller);
+		this.resetCursorHideTimer();
+		return true;
+	}
+
 	toggleImmersiveMode() {
 		if (this.isImmersive) {
 			this.exitImmersiveMode();
@@ -241,6 +496,9 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.isImmersive = true;
 		this.updatePreserveTopBottomSpaceClass();
 		this.updateCursorBlinkClass();
+		if (this.settings.standardPageTurn) {
+			this.scheduleStandardPageTrim(this.getStandardPageScroller());
+		}
 		this.resetCursorHideTimer();
 		this.ribbonIconEl.setAttribute('aria-label', '退出沉浸模式');
 		this.ribbonIconEl.classList.add('is-active');
@@ -259,6 +517,8 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		);
 		document.body.style.removeProperty('--puffs-cursor-blink-count');
 		this.clearCursorHideTimer();
+		this.clearStandardPageTrim();
+		this.clearStandardPageHistory();
 
 		// 2. 恢复侧边栏
 		if (this.wasLeftOpen) {
@@ -395,6 +655,24 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.preserveTopBottomSpace = value;
 						this.plugin.updatePreserveTopBottomSpaceClass();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('标准翻页')
+			.setDesc('进入沉浸模式后，Page Down 翻到当前视口底部下一行，Page Up 按同样的行数向上翻页。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.standardPageTurn)
+					.onChange(async (value) => {
+						this.plugin.settings.standardPageTurn = value;
+						if (value && this.plugin.isImmersive) {
+							this.plugin.scheduleStandardPageTrim(this.plugin.getStandardPageScroller());
+						} else if (!value) {
+							this.plugin.clearStandardPageTrim();
+							this.plugin.clearStandardPageHistory();
+						}
 						await this.plugin.saveSettings();
 					})
 			);

@@ -6,6 +6,7 @@
   "autoHideCursorDelay": 500,
   "cursorBlinkCount": 0,
   "preserveTopBottomSpace": true,
+  "standardPageTurn": true,
   "exitOnEsc": false,
   "hideRibbon": false,
   "hideTabHeader": false,
