@@ -2,6 +2,8 @@
 
 const obsidian = require('obsidian');
 
+const DIRECTION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
 // ─── 默认设置 ─────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
 	hideLeftSidebar: true,
@@ -14,6 +16,7 @@ const DEFAULT_SETTINGS = {
 	cursorBlinkCount: 10,
 	preserveTopBottomSpace: false,
 	standardPageTurn: true,
+	disableArrowKeysInImmersive: false,
 	exitOnEsc: true,
 };
 
@@ -86,6 +89,20 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 					evt.preventDefault();
 					evt.stopPropagation();
 				}
+				return;
+			}
+
+			if (
+				this.settings.disableArrowKeysInImmersive &&
+				this.isImmersive &&
+				!this.hasOpenModal() &&
+				DIRECTION_KEYS.has(evt.key) &&
+				!evt.altKey &&
+				!evt.ctrlKey &&
+				!evt.metaKey
+			) {
+				evt.preventDefault();
+				evt.stopPropagation();
 				return;
 			}
 
@@ -759,6 +776,18 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 							this.plugin.clearStandardPageTrim();
 							this.plugin.clearStandardPageHistory();
 						}
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('沉浸模式中禁用方向键')
+			.setDesc('进入沉浸模式后，禁用上下左右方向键。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.disableArrowKeysInImmersive)
+					.onChange(async (value) => {
+						this.plugin.settings.disableArrowKeysInImmersive = value;
 						await this.plugin.saveSettings();
 					})
 			);

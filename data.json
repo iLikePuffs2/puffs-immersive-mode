@@ -9,6 +9,7 @@
   "cursorBlinkCount": 0,
   "preserveTopBottomSpace": true,
   "standardPageTurn": true,
+  "disableArrowKeysInImmersive": true,
   "exitOnEsc": false,
   "hideRibbon": false,
   "hideTabHeader": false,
