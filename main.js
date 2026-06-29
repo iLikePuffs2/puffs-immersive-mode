@@ -67,6 +67,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			callback: () => this.toggleHideTopNavNormally(),
 		});
 
+		this.addCommand({
+			id: 'toggle-disable-arrow-keys-in-immersive',
+			name: '切换：沉浸模式中禁用方向键',
+			callback: () => this.toggleDisableArrowKeysInImmersive(),
+		});
+
 		// Ribbon 图标，点击切换沉浸模式
 		this.ribbonIconEl = this.addRibbonIcon(
 			'expand',
@@ -292,6 +298,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	async toggleHideTopNavNormally() {
 		this.settings.hideTopNavBarNormally = !this.settings.hideTopNavBarNormally;
 		this.updateNormalTopNavBarClass();
+		await this.saveSettings();
+	}
+
+	async toggleDisableArrowKeysInImmersive() {
+		this.settings.disableArrowKeysInImmersive =
+			!this.settings.disableArrowKeysInImmersive;
 		await this.saveSettings();
 	}
 
