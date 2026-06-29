@@ -118,6 +118,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			}
 		});
 
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				this.updatePreserveTopBottomSpaceClass();
+			})
+		);
+
 		// 设置选项卡
 		this.addSettingTab(new ImmersiveModeSettingTab(this.app, this));
 	}
@@ -229,7 +235,27 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	updatePreserveTopBottomSpaceClass() {
 		document.body.classList.toggle(
 			'immersive-preserve-top-bottom-space',
-			this.isImmersive && this.settings.preserveTopBottomSpace
+			this.isImmersive &&
+				this.settings.preserveTopBottomSpace &&
+				!this.isActivePuffsReaderView()
+		);
+	}
+
+	isActivePuffsReaderView() {
+		const leaf = this.app.workspace.activeLeaf;
+		const view = leaf && leaf.view;
+		const viewType =
+			view && typeof view.getViewType === 'function'
+				? view.getViewType()
+				: null;
+
+		if (viewType === 'puffs-reader-view') {
+			return true;
+		}
+
+		const containerEl = (view && view.containerEl) || (leaf && leaf.containerEl);
+		return !!containerEl?.querySelector?.(
+			'.workspace-leaf-content[data-type="puffs-reader-view"], .puffs-reader-root'
 		);
 	}
 
