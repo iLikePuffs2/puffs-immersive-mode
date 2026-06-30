@@ -1,16 +1,18 @@
 /* ===== 沉浸模式样式 ===== */
 
+/* puffs-reader 标签页使用 b08e75d 的旧版沉浸模式；后续沉浸样式需排除该 class。 */
+
 /* 隐藏底部状态栏 */
 body.immersive-hide-statusbar .status-bar {
 	display: none !important;
 }
 
 /* 隐藏顶部导航栏 */
-body.immersive-mode.immersive-hide-top-nav:not(.immersive-preserve-top-bottom-space) .workspace-tab-header-container {
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-hide-top-nav:not(.immersive-preserve-top-bottom-space) .workspace-tab-header-container {
 	display: none !important;
 }
 
-body.immersive-mode:not(.immersive-hide-top-nav) .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
+body.immersive-mode:not(.immersive-puffs-reader-legacy):not(.immersive-hide-top-nav) .workspace .workspace-tabs.mod-top .workspace-tab-header-container {
 	display: flex !important;
 	height: 40px !important;
 	min-height: 40px !important;
@@ -19,7 +21,7 @@ body.immersive-mode:not(.immersive-hide-top-nav) .workspace .workspace-tabs.mod-
 }
 
 /* 常规时隐藏顶部导航栏并保留占位 */
-body.puffs-hide-top-nav-normal .workspace .mod-root .workspace-tab-header-container {
+body.puffs-hide-top-nav-normal:not(.immersive-puffs-reader-legacy) .workspace .mod-root .workspace-tab-header-container {
 	display: flex !important;
 	height: 40px !important;
 	min-height: 40px !important;
@@ -68,29 +70,29 @@ body.immersive-hide-cursor * {
 }
 
 /* 标准翻页时隐藏底部半行 */
-body.immersive-mode .immersive-standard-page-scroller {
+body.immersive-mode:not(.immersive-puffs-reader-legacy) .immersive-standard-page-scroller {
 	clip-path: inset(0 0 var(--puffs-standard-page-bottom-trim, 0px) 0);
 }
 
 /* 控制编辑光标闪烁次数 */
-body.immersive-mode.immersive-caret-no-blink .cm-editor .cm-content {
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-no-blink .cm-editor .cm-content {
 	caret-animation: manual !important;
 	caret-color: transparent !important;
 }
 
-body.immersive-mode.immersive-caret-no-blink .cm-editor .cm-cursorLayer,
-body.immersive-mode.immersive-caret-no-blink .cm-editor .cm-cursor {
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-no-blink .cm-editor .cm-cursorLayer,
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-no-blink .cm-editor .cm-cursor {
 	animation: none !important;
 	opacity: 0 !important;
 }
 
-body.immersive-mode.immersive-caret-limited-blink .cm-editor .cm-content {
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-limited-blink .cm-editor .cm-content {
 	caret-animation: manual !important;
 	animation: puffs-native-caret-blink 1.06s steps(1, end) var(--puffs-cursor-blink-count) forwards !important;
 }
 
-body.immersive-mode.immersive-caret-limited-blink .cm-editor .cm-cursorLayer,
-body.immersive-mode.immersive-caret-limited-blink .cm-editor .cm-cursor {
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-limited-blink .cm-editor .cm-cursorLayer,
+body.immersive-mode:not(.immersive-puffs-reader-legacy).immersive-caret-limited-blink .cm-editor .cm-cursor {
 	animation: puffs-caret-blink 1.06s steps(1, end) var(--puffs-cursor-blink-count) forwards !important;
 }
 

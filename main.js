@@ -3,6 +3,8 @@
 const obsidian = require('obsidian');
 
 const DIRECTION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const PUFFS_READER_LEGACY_COMMIT = 'b08e75d915b427702263a9c0a238806ed2c2341b';
+const PUFFS_READER_LEGACY_CLASS = 'immersive-puffs-reader-legacy';
 
 // ─── 默认设置 ─────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -44,6 +46,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.cursorHideTimeout = null;
 		this.standardPageScrollerEl = null;
 		this.standardPageHistory = [];
+		this.puffsReaderLegacyImmersive = false;
 
 		await this.loadSettings();
 		this.updateNormalTopNavBarClass();
@@ -84,7 +87,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.keydownHandler = (evt) => {
 			if (
 				this.settings.standardPageTurn &&
-				this.isImmersive &&
+				this.usesModernImmersiveFeatures() &&
 				!this.hasOpenModal() &&
 				(evt.key === 'PageDown' || evt.key === 'PageUp') &&
 				!evt.altKey &&
@@ -100,7 +103,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 			if (
 				this.settings.disableArrowKeysInImmersive &&
-				this.isImmersive &&
+				this.usesModernImmersiveFeatures() &&
 				!this.hasOpenModal() &&
 				DIRECTION_KEYS.has(evt.key) &&
 				!evt.altKey &&
@@ -135,7 +138,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}, true);
 
 		this.registerDomEvent(window, 'resize', () => {
-			if (this.isImmersive && this.settings.standardPageTurn) {
+			if (this.usesModernImmersiveFeatures() && this.settings.standardPageTurn) {
 				this.clearStandardPageHistory();
 				this.applyStandardPageTrim(this.getStandardPageScroller());
 			}
@@ -143,7 +146,8 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on('active-leaf-change', () => {
-				this.updatePreserveTopBottomSpaceClass();
+				this.updateNormalTopNavBarClass();
+				this.refreshImmersiveProfileForActiveLeaf();
 			})
 		);
 
@@ -157,6 +161,8 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			this.exitImmersiveMode();
 		}
 		document.body.classList.remove('puffs-hide-top-nav-normal');
+		document.body.classList.remove(PUFFS_READER_LEGACY_CLASS);
+		document.body.removeAttribute('data-puffs-reader-immersive-commit');
 	}
 
 	// ── 状态辅助方法 ───────────────────────────────────────────────────
@@ -212,12 +218,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.clearCursorHideTimer();
 
 		const delay = this.getAutoHideCursorDelay();
-		if (!this.isImmersive || delay === 0) {
+		if (!this.usesModernImmersiveFeatures() || delay === 0) {
 			return;
 		}
 
 		this.cursorHideTimeout = window.setTimeout(() => {
-			if (this.isImmersive && this.getAutoHideCursorDelay() > 0) {
+			if (this.usesModernImmersiveFeatures() && this.getAutoHideCursorDelay() > 0) {
 				document.body.classList.add('immersive-hide-cursor');
 			}
 			this.cursorHideTimeout = null;
@@ -233,6 +239,12 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	}
 
 	updateCursorBlinkClass() {
+		if (!this.usesModernImmersiveFeatures()) {
+			document.body.style.removeProperty('--puffs-cursor-blink-count');
+			document.body.classList.remove('immersive-caret-no-blink', 'immersive-caret-limited-blink');
+			return;
+		}
+
 		const count = this.getCursorBlinkCount();
 		document.body.style.setProperty('--puffs-cursor-blink-count', String(count));
 		document.body.classList.toggle(
@@ -246,7 +258,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	}
 
 	restartCursorBlink() {
-		if (!this.isImmersive || this.getCursorBlinkCount() < 1 || this.getCursorBlinkCount() >= 10) {
+		if (!this.usesModernImmersiveFeatures() || this.getCursorBlinkCount() < 1 || this.getCursorBlinkCount() >= 10) {
 			return;
 		}
 
@@ -258,10 +270,17 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	updatePreserveTopBottomSpaceClass() {
 		document.body.classList.toggle(
 			'immersive-preserve-top-bottom-space',
-			this.isImmersive &&
-				this.settings.preserveTopBottomSpace &&
-				!this.isActivePuffsReaderView()
+			this.usesModernImmersiveFeatures() &&
+				this.settings.preserveTopBottomSpace
 		);
+	}
+
+	isPuffsReaderLegacyImmersiveMode() {
+		return this.isImmersive && this.puffsReaderLegacyImmersive;
+	}
+
+	usesModernImmersiveFeatures() {
+		return this.isImmersive && !this.puffsReaderLegacyImmersive;
 	}
 
 	isActivePuffsReaderView() {
@@ -285,13 +304,61 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 	updateNormalTopNavBarClass() {
 		document.body.classList.toggle(
 			'puffs-hide-top-nav-normal',
-			this.settings.hideTopNavBarNormally
+			this.settings.hideTopNavBarNormally && !this.isActivePuffsReaderView()
 		);
+	}
+
+	refreshImmersiveProfileForActiveLeaf() {
+		if (!this.isImmersive) {
+			this.puffsReaderLegacyImmersive = false;
+			document.body.classList.remove(PUFFS_READER_LEGACY_CLASS);
+			document.body.removeAttribute('data-puffs-reader-immersive-commit');
+			return;
+		}
+
+		this.puffsReaderLegacyImmersive = this.isActivePuffsReaderView();
+		this.applyImmersiveFeatureState();
+	}
+
+	applyImmersiveFeatureState() {
+		const isLegacyReader = this.isPuffsReaderLegacyImmersiveMode();
+
+		document.body.classList.toggle(PUFFS_READER_LEGACY_CLASS, isLegacyReader);
+		if (isLegacyReader) {
+			document.body.setAttribute('data-puffs-reader-immersive-commit', PUFFS_READER_LEGACY_COMMIT);
+		} else {
+			document.body.removeAttribute('data-puffs-reader-immersive-commit');
+		}
+
+		document.body.classList.toggle(
+			'immersive-hide-top-nav',
+			this.usesModernImmersiveFeatures() && this.settings.hideTopNavBar
+		);
+		document.body.classList.toggle(
+			'immersive-hide-statusbar',
+			this.isImmersive && this.settings.hideStatusBar
+		);
+		document.body.classList.toggle(
+			'immersive-hide-scrollbar',
+			this.usesModernImmersiveFeatures() && this.settings.hideScrollbar
+		);
+
+		this.updatePreserveTopBottomSpaceClass();
+		this.updateCursorBlinkClass();
+
+		if (this.usesModernImmersiveFeatures() && this.settings.standardPageTurn) {
+			this.scheduleStandardPageTrim(this.getStandardPageScroller());
+		} else {
+			this.clearStandardPageTrim();
+			this.clearStandardPageHistory();
+		}
+
+		this.resetCursorHideTimer();
 	}
 
 	async togglePreserveTopBottomSpace() {
 		this.settings.preserveTopBottomSpace = !this.settings.preserveTopBottomSpace;
-		this.updatePreserveTopBottomSpaceClass();
+		this.applyImmersiveFeatureState();
 		await this.saveSettings();
 	}
 
@@ -318,8 +385,6 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		const selectors = [
 			'.cm-scroller',
 			'.markdown-preview-view',
-			'.puffs-reader-content',
-			'.puffs-reader-main',
 			'.view-content',
 		];
 
@@ -353,7 +418,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}
 
 		const elements = Array.from(scroller.querySelectorAll(
-			'.puffs-reader-line, .puffs-reader-paragraph, p, li, .markdown-preview-section > div'
+			'p, li, .markdown-preview-section > div'
 		));
 
 		return elements.length ? elements : Array.from(scroller.children);
@@ -454,7 +519,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 	applyStandardPageTrim(scroller) {
 		this.clearStandardPageTrim();
-		if (!this.isImmersive || !this.settings.standardPageTurn || !scroller) {
+		if (!this.usesModernImmersiveFeatures() || !this.settings.standardPageTurn || !scroller) {
 			return;
 		}
 
@@ -476,13 +541,17 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 	scheduleStandardPageTrim(scroller) {
 		window.requestAnimationFrame(() => {
-			if (this.isImmersive && this.settings.standardPageTurn) {
+			if (this.usesModernImmersiveFeatures() && this.settings.standardPageTurn) {
 				this.applyStandardPageTrim(scroller || this.getStandardPageScroller());
 			}
 		});
 	}
 
 	standardPageTurn(direction) {
+		if (!this.usesModernImmersiveFeatures()) {
+			return false;
+		}
+
 		const scroller = this.getStandardPageScroller();
 		if (!scroller) {
 			return false;
@@ -561,26 +630,14 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			this.setFullScreenState(true);
 		}
 
-		// 4. 根据设置添加 CSS 类
+		// 4. 根据设置添加 CSS 类。puffs-reader 标签页固定使用 b08e75d 的旧版沉浸模式。
+		this.isImmersive = true;
+		this.puffsReaderLegacyImmersive = this.isActivePuffsReaderView();
+		this.updateNormalTopNavBarClass();
 		document.body.classList.add('immersive-mode');
-		if (this.settings.hideTopNavBar) {
-			document.body.classList.add('immersive-hide-top-nav');
-		}
-		if (this.settings.hideStatusBar) {
-			document.body.classList.add('immersive-hide-statusbar');
-		}
-		if (this.settings.hideScrollbar) {
-			document.body.classList.add('immersive-hide-scrollbar');
-		}
 
 		// 5. 更新状态和图标
-		this.isImmersive = true;
-		this.updatePreserveTopBottomSpaceClass();
-		this.updateCursorBlinkClass();
-		if (this.settings.standardPageTurn) {
-			this.scheduleStandardPageTrim(this.getStandardPageScroller());
-		}
-		this.resetCursorHideTimer();
+		this.applyImmersiveFeatureState();
 		this.ribbonIconEl.setAttribute('aria-label', '退出沉浸模式');
 		this.ribbonIconEl.classList.add('is-active');
 	}
@@ -595,9 +652,11 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			'immersive-hide-cursor',
 			'immersive-preserve-top-bottom-space',
 			'immersive-caret-no-blink',
-			'immersive-caret-limited-blink'
+			'immersive-caret-limited-blink',
+			PUFFS_READER_LEGACY_CLASS
 		);
 		document.body.style.removeProperty('--puffs-cursor-blink-count');
+		document.body.removeAttribute('data-puffs-reader-immersive-commit');
 		this.clearCursorHideTimer();
 		this.clearStandardPageTrim();
 		this.clearStandardPageHistory();
@@ -617,6 +676,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 
 		// 4. 更新状态和图标
 		this.isImmersive = false;
+		this.puffsReaderLegacyImmersive = false;
 		this.ribbonIconEl.setAttribute('aria-label', '切换沉浸模式');
 		this.ribbonIconEl.classList.remove('is-active');
 	}
@@ -675,14 +735,7 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.hideTopNavBar)
 					.onChange(async (value) => {
 						this.plugin.settings.hideTopNavBar = value;
-						document.body.classList.toggle(
-							'immersive-hide-top-nav',
-							this.plugin.isImmersive && value
-						);
-						if (this.plugin.isImmersive && this.plugin.settings.standardPageTurn) {
-							this.plugin.clearStandardPageHistory();
-							this.plugin.scheduleStandardPageTrim(this.plugin.getStandardPageScroller());
-						}
+						this.plugin.applyImmersiveFeatureState();
 						await this.plugin.saveSettings();
 					})
 			);
@@ -708,6 +761,7 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.hideStatusBar)
 					.onChange(async (value) => {
 						this.plugin.settings.hideStatusBar = value;
+						this.plugin.applyImmersiveFeatureState();
 						await this.plugin.saveSettings();
 					})
 			);
@@ -720,10 +774,7 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.hideScrollbar)
 					.onChange(async (value) => {
 						this.plugin.settings.hideScrollbar = value;
-						document.body.classList.toggle(
-							'immersive-hide-scrollbar',
-							this.plugin.isImmersive && value
-						);
+						this.plugin.applyImmersiveFeatureState();
 						await this.plugin.saveSettings();
 					})
 			);
@@ -769,7 +820,7 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.preserveTopBottomSpace)
 					.onChange(async (value) => {
 						this.plugin.settings.preserveTopBottomSpace = value;
-						this.plugin.updatePreserveTopBottomSpaceClass();
+						this.plugin.applyImmersiveFeatureState();
 						await this.plugin.saveSettings();
 					})
 			);
@@ -782,12 +833,7 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.setValue(this.plugin.settings.standardPageTurn)
 					.onChange(async (value) => {
 						this.plugin.settings.standardPageTurn = value;
-						if (value && this.plugin.isImmersive) {
-							this.plugin.scheduleStandardPageTrim(this.plugin.getStandardPageScroller());
-						} else if (!value) {
-							this.plugin.clearStandardPageTrim();
-							this.plugin.clearStandardPageHistory();
-						}
+						this.plugin.applyImmersiveFeatureState();
 						await this.plugin.saveSettings();
 					})
 			);
