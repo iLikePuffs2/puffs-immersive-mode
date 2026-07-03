@@ -11,6 +11,7 @@
   "standardPageTurn": true,
   "disableArrowKeysInImmersive": false,
   "exitOnEsc": false,
+  "sidebarResetWidth": 300,
   "hideRibbon": false,
   "hideTabHeader": false,
   "hideTitleBar": false

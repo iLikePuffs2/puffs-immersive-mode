@@ -3,6 +3,10 @@
 const obsidian = require('obsidian');
 
 const DIRECTION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const OUTLINE_VIEW_TYPE = 'outline';
+const OUTLINE_PLUGIN_ID = 'outline';
+const OPEN_OUTLINE_COMMAND_ID = 'outline:open';
+const TOGGLE_RIGHT_SIDEBAR_COMMAND_ID = 'app:toggle-right-sidebar';
 const PUFFS_READER_LEGACY_COMMIT = 'b08e75d915b427702263a9c0a238806ed2c2341b';
 const PUFFS_READER_LEGACY_CLASS = 'immersive-puffs-reader-legacy';
 
@@ -20,6 +24,7 @@ const DEFAULT_SETTINGS = {
 	standardPageTurn: true,
 	disableArrowKeysInImmersive: false,
 	exitOnEsc: true,
+	sidebarResetWidth: 300,
 };
 
 // ─── 获取 Electron 窗口实例 ───────────────────────────────────────────
@@ -74,6 +79,20 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			id: 'toggle-disable-arrow-keys-in-immersive',
 			name: '切换：沉浸模式中禁用方向键',
 			callback: () => this.toggleDisableArrowKeysInImmersive(),
+		});
+
+		this.addCommand({
+			id: 'reset-sidebar-widths',
+			name: '重置侧边栏宽度',
+			callback: () => this.resetSidebarWidths(),
+		});
+
+		this.addCommand({
+			id: 'toggle-outline-sidebar',
+			name: '切换大纲侧边栏',
+			callback: async () => {
+				await this.toggleOutlineSidebar();
+			},
 		});
 
 		// Ribbon 图标，点击切换沉浸模式
@@ -611,6 +630,91 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}
 	}
 
+	normalizeSidebarResetWidth(value) {
+		const width = Number.parseInt(value, 10);
+		if (!Number.isFinite(width)) {
+			return DEFAULT_SETTINGS.sidebarResetWidth;
+		}
+		return Math.max(100, width);
+	}
+
+	getSidebarResetWidth() {
+		return this.normalizeSidebarResetWidth(this.settings.sidebarResetWidth);
+	}
+
+	resetSidebarWidths(targetWidth = this.getSidebarResetWidth()) {
+		const left = this.app.workspace.leftSplit;
+		const right = this.app.workspace.rightSplit;
+
+		for (const split of [left, right]) {
+			if (split && split.containerEl) {
+				split.size = targetWidth;
+				split.containerEl.style.width = `${targetWidth}px`;
+			}
+		}
+
+		this.app.workspace.requestSaveLayout?.();
+		new obsidian.Notice(`侧边栏宽度已重置为 ${targetWidth}px`);
+	}
+
+	getOutlineLeaves() {
+		return this.app.workspace.getLeavesOfType(OUTLINE_VIEW_TYPE) ?? [];
+	}
+
+	isOutlineVisible() {
+		return this.getOutlineLeaves().some((leaf) => {
+			if (typeof leaf.isVisible === 'function') {
+				return leaf.isVisible();
+			}
+
+			return Boolean(leaf.view?.containerEl?.isShown());
+		});
+	}
+
+	async toggleOutlineSidebar() {
+		const outlinePlugin = this.app.internalPlugins?.getPluginById?.(OUTLINE_PLUGIN_ID);
+		if (outlinePlugin && !outlinePlugin.enabled) {
+			new obsidian.Notice('请先启用 Obsidian 核心插件 Outline。');
+			return;
+		}
+
+		if (this.isOutlineVisible()) {
+			await this.app.commands.executeCommandById(TOGGLE_RIGHT_SIDEBAR_COMMAND_ID);
+			return;
+		}
+
+		const opened = await this.app.commands.executeCommandById(OPEN_OUTLINE_COMMAND_ID);
+		if (opened === false) {
+			new obsidian.Notice('无法打开大纲，请确认核心插件 Outline 已启用。');
+		}
+	}
+
+	getCommandHotkeyLabel(commandId) {
+		const fullCommandId = `${this.manifest.id}:${commandId}`;
+		const hotkeys = this.app.hotkeyManager?.getHotkeys?.(fullCommandId) ?? [];
+		if (!hotkeys.length) {
+			return '未绑定';
+		}
+
+		return hotkeys.map((hotkey) => this.formatHotkey(hotkey)).join(' / ');
+	}
+
+	formatHotkey(hotkey) {
+		const isMac = window.navigator.platform.toLowerCase().includes('mac');
+		const modifierLabels = {
+			Mod: isMac ? 'Cmd' : 'Ctrl',
+			Ctrl: 'Ctrl',
+			Meta: 'Cmd',
+			Shift: 'Shift',
+			Alt: 'Alt',
+		};
+		const modifiers = (hotkey.modifiers ?? []).map((modifier) => (
+			modifierLabels[modifier] ?? modifier
+		));
+
+		return [...modifiers, hotkey.key].join(' + ');
+	}
+
 	enterImmersiveMode() {
 		// 1. 保存当前侧边栏状态
 		this.wasLeftOpen = !this.app.workspace.leftSplit.collapsed;
@@ -704,6 +808,10 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 		containerEl.empty();
 
 		new obsidian.Setting(containerEl)
+			.setName('沉浸界面设置')
+			.setHeading();
+
+		new obsidian.Setting(containerEl)
 			.setName('隐藏左侧边栏')
 			.setDesc('进入沉浸模式时收起左侧边栏（文件管理器、搜索等）。')
 			.addToggle((toggle) =>
@@ -736,19 +844,6 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.hideTopNavBar = value;
 						this.plugin.applyImmersiveFeatureState();
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new obsidian.Setting(containerEl)
-			.setName('常规时隐藏顶部导航栏')
-			.setDesc('即使没有进入沉浸模式，依旧隐藏顶部标签页导航栏，且保持空白占位')
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.hideTopNavBarNormally)
-					.onChange(async (value) => {
-						this.plugin.settings.hideTopNavBarNormally = value;
-						this.plugin.updateNormalTopNavBarClass();
 						await this.plugin.saveSettings();
 					})
 			);
@@ -861,6 +956,51 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new obsidian.Setting(containerEl)
+			.setName('常规界面设置')
+			.setHeading();
+
+		new obsidian.Setting(containerEl)
+			.setName('常规时隐藏顶部导航栏')
+			.setDesc('即使没有进入沉浸模式，依旧隐藏顶部标签页导航栏，且保持空白占位。')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideTopNavBarNormally)
+					.onChange(async (value) => {
+						this.plugin.settings.hideTopNavBarNormally = value;
+						this.plugin.updateNormalTopNavBarClass();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('重置侧边栏宽度')
+			.setDesc('一键将左右侧边栏宽度重置为指定像素值。默认值为300。')
+			.addButton((button) =>
+				button
+					.setButtonText('重置')
+					.onClick(() => this.plugin.resetSidebarWidths())
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder('300')
+					.setValue(String(this.plugin.getSidebarResetWidth()))
+					.onChange(async (value) => {
+						this.plugin.settings.sidebarResetWidth =
+							this.plugin.normalizeSidebarResetWidth(value);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new obsidian.Setting(containerEl)
+			.setName('大纲侧边栏')
+			.setDesc('一键打开或收起 Obsidian 核心大纲界面。')
+			.addText((text) => {
+				text.setValue(this.plugin.getCommandHotkeyLabel('toggle-outline-sidebar'));
+				text.inputEl.readOnly = true;
+				text.inputEl.addClass('puffs-readonly-hotkey-input');
+			});
 	}
 }
 
