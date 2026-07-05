@@ -714,6 +714,43 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		});
 	}
 
+	getVisibleTagLeaf() {
+		return this.getTagLeaves().find((leaf) => {
+			if (typeof leaf.isVisible === 'function') {
+				return leaf.isVisible();
+			}
+
+			return Boolean(leaf.view?.containerEl?.isShown());
+		}) ?? null;
+	}
+
+	isLeafFocused(leaf) {
+		if (!leaf) {
+			return false;
+		}
+
+		const activeEl = document.activeElement;
+		const containerEl = leaf.view?.containerEl || leaf.containerEl;
+		return this.app.workspace.activeLeaf === leaf || Boolean(
+			activeEl && containerEl?.contains?.(activeEl)
+		);
+	}
+
+	async focusLeaf(leaf) {
+		if (!leaf) {
+			return;
+		}
+
+		await this.app.workspace.revealLeaf?.(leaf);
+		this.app.workspace.setActiveLeaf?.(leaf, { focus: true });
+
+		const containerEl = leaf.view?.containerEl || leaf.containerEl;
+		const focusTarget = containerEl?.querySelector?.(
+			'input, button, [tabindex]:not([tabindex="-1"])'
+		);
+		(focusTarget || containerEl)?.focus?.();
+	}
+
 	async toggleTagSidebar() {
 		const tagPlugin = this.app.internalPlugins?.getPluginById?.(TAG_PLUGIN_ID);
 		if (tagPlugin && !tagPlugin.enabled) {
@@ -721,7 +758,13 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			return;
 		}
 
-		if (this.isTagVisible()) {
+		const visibleTagLeaf = this.getVisibleTagLeaf();
+		if (visibleTagLeaf) {
+			if (!this.isLeafFocused(visibleTagLeaf)) {
+				await this.focusLeaf(visibleTagLeaf);
+				return;
+			}
+
 			await this.app.commands.executeCommandById(TOGGLE_RIGHT_SIDEBAR_COMMAND_ID);
 			return;
 		}

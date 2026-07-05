@@ -6,7 +6,7 @@
   "hideStatusBar": true,
   "hideScrollbar": false,
   "autoHideCursorDelay": 500,
-  "cursorBlinkCount": 0,
+  "cursorBlinkCount": 10,
   "preserveTopBottomSpace": true,
   "standardPageTurn": true,
   "disableArrowKeysInImmersive": false,
