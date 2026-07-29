@@ -49,7 +49,7 @@ body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-statusbar
 
 body.immersive-mode.immersive-preserve-top-bottom-space.immersive-hide-statusbar .workspace > .mod-root {
 	box-sizing: border-box;
-	padding-bottom: 31px;
+	padding-bottom: var(--puffs-windows-taskbar-height, 48px);
 }
 
 /* 隐藏右侧滚动条 */

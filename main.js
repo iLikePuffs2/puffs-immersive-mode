@@ -57,6 +57,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		this.puffsReaderLegacyImmersive = false;
 
 		await this.loadSettings();
+		this.updateWindowsTaskbarHeight();
 		this.updateNormalTopNavBarClass();
 
 		// 注册切换命令（用户可自行绑定快捷键）
@@ -192,6 +193,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}
 		document.body.classList.remove('puffs-hide-top-nav-normal');
 		document.body.classList.remove(PUFFS_READER_LEGACY_CLASS);
+		document.body.style.removeProperty('--puffs-windows-taskbar-height');
 		document.body.removeAttribute('data-puffs-reader-immersive-commit');
 	}
 
@@ -303,6 +305,13 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			this.usesModernImmersiveFeatures() &&
 				this.settings.preserveTopBottomSpace
 		);
+	}
+
+	updateWindowsTaskbarHeight() {
+		const taskbarHeight = Math.max(0, screen.height - screen.availHeight);
+		if (taskbarHeight > 0) {
+			document.body.style.setProperty('--puffs-windows-taskbar-height', `${taskbarHeight}px`);
+		}
 	}
 
 	isPuffsReaderLegacyImmersiveMode() {
@@ -805,6 +814,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		// 1. 保存当前侧边栏状态
 		this.wasLeftOpen = !this.app.workspace.leftSplit.collapsed;
 		this.wasRightOpen = !this.app.workspace.rightSplit.collapsed;
+		this.updateWindowsTaskbarHeight();
 
 		// 2. 根据设置收起侧边栏
 		if (this.settings.hideLeftSidebar) {
@@ -846,6 +856,7 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			PUFFS_READER_LEGACY_CLASS
 		);
 		document.body.style.removeProperty('--puffs-cursor-blink-count');
+		document.body.style.removeProperty('--puffs-windows-taskbar-height');
 		document.body.removeAttribute('data-puffs-reader-immersive-commit');
 		this.clearCursorHideTimer();
 		this.clearStandardPageTrim();
