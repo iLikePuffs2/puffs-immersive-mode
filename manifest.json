@@ -1,7 +1,7 @@
 {
 	"id": "puffs-immersive-mode",
 	"name": "puffs-immersive-mode",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.12.7",
 	"description": "一键进入沉浸模式，让编辑器页面变得极度简洁",
 	"author": "puffs",

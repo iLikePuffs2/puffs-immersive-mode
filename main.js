@@ -6,9 +6,6 @@ const DIRECTION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight
 const OUTLINE_VIEW_TYPE = 'outline';
 const OUTLINE_PLUGIN_ID = 'outline';
 const OPEN_OUTLINE_COMMAND_ID = 'outline:open';
-const TAG_VIEW_TYPE = 'tag';
-const TAG_PLUGIN_ID = 'tag-pane';
-const OPEN_TAG_COMMAND_ID = 'tag-pane:open';
 const TOGGLE_RIGHT_SIDEBAR_COMMAND_ID = 'app:toggle-right-sidebar';
 const PUFFS_READER_LEGACY_COMMIT = 'b08e75d915b427702263a9c0a238806ed2c2341b';
 const PUFFS_READER_LEGACY_CLASS = 'immersive-puffs-reader-legacy';
@@ -96,14 +93,6 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 			name: '打开或收起大纲侧边栏',
 			callback: async () => {
 				await this.toggleOutlineSidebar();
-			},
-		});
-
-		this.addCommand({
-			id: 'toggle-tag-sidebar',
-			name: '打开或收起标签侧边栏',
-			callback: async () => {
-				await this.toggleTagSidebar();
 			},
 		});
 
@@ -709,81 +698,6 @@ class ImmersiveModePlugin extends obsidian.Plugin {
 		}
 	}
 
-	getTagLeaves() {
-		return this.app.workspace.getLeavesOfType(TAG_VIEW_TYPE) ?? [];
-	}
-
-	isTagVisible() {
-		return this.getTagLeaves().some((leaf) => {
-			if (typeof leaf.isVisible === 'function') {
-				return leaf.isVisible();
-			}
-
-			return Boolean(leaf.view?.containerEl?.isShown());
-		});
-	}
-
-	getVisibleTagLeaf() {
-		return this.getTagLeaves().find((leaf) => {
-			if (typeof leaf.isVisible === 'function') {
-				return leaf.isVisible();
-			}
-
-			return Boolean(leaf.view?.containerEl?.isShown());
-		}) ?? null;
-	}
-
-	isLeafFocused(leaf) {
-		if (!leaf) {
-			return false;
-		}
-
-		const activeEl = document.activeElement;
-		const containerEl = leaf.view?.containerEl || leaf.containerEl;
-		return this.app.workspace.activeLeaf === leaf || Boolean(
-			activeEl && containerEl?.contains?.(activeEl)
-		);
-	}
-
-	async focusLeaf(leaf) {
-		if (!leaf) {
-			return;
-		}
-
-		await this.app.workspace.revealLeaf?.(leaf);
-		this.app.workspace.setActiveLeaf?.(leaf, { focus: true });
-
-		const containerEl = leaf.view?.containerEl || leaf.containerEl;
-		const focusTarget = containerEl?.querySelector?.(
-			'input, button, [tabindex]:not([tabindex="-1"])'
-		);
-		(focusTarget || containerEl)?.focus?.();
-	}
-
-	async toggleTagSidebar() {
-		const tagPlugin = this.app.internalPlugins?.getPluginById?.(TAG_PLUGIN_ID);
-		if (tagPlugin && !tagPlugin.enabled) {
-			new obsidian.Notice('请先启用 Obsidian 核心插件 标签列表。');
-			return;
-		}
-
-		const visibleTagLeaf = this.getVisibleTagLeaf();
-		if (visibleTagLeaf) {
-			if (!this.isLeafFocused(visibleTagLeaf)) {
-				await this.focusLeaf(visibleTagLeaf);
-				return;
-			}
-
-			await this.app.commands.executeCommandById(TOGGLE_RIGHT_SIDEBAR_COMMAND_ID);
-			return;
-		}
-
-		const opened = await this.app.commands.executeCommandById(OPEN_TAG_COMMAND_ID);
-		if (opened === false) {
-			new obsidian.Notice('无法打开标签列表，请确认核心插件 标签列表 已启用。');
-		}
-	}
-
 	getCommandHotkeyLabel(commandId) {
 		const fullCommandId = `${this.manifest.id}:${commandId}`;
 		const hotkeys = this.app.hotkeyManager?.getHotkeys?.(fullCommandId) ?? [];
@@ -1099,14 +1013,6 @@ class ImmersiveModeSettingTab extends obsidian.PluginSettingTab {
 				text.inputEl.addClass('puffs-readonly-hotkey-input');
 			});
 
-		new obsidian.Setting(containerEl)
-			.setName('打开或收起标签侧边栏')
-			.setDesc('一键打开或收起 Obsidian 核心插件“标签列表”所处的侧边栏')
-			.addText((text) => {
-				text.setValue(this.plugin.getCommandHotkeyLabel('toggle-tag-sidebar'));
-				text.inputEl.readOnly = true;
-				text.inputEl.addClass('puffs-readonly-hotkey-input');
-			});
 	}
 }
 
